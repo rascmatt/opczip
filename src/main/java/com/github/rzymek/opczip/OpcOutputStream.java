@@ -18,7 +18,7 @@ public class OpcOutputStream extends DeflaterOutputStream {
     private final List<Entry> entries = new ArrayList<>();
     private final CRC32 crc = new CRC32();
     private Entry current;
-    private int written = 0;
+    private long written = 0;
     private boolean finished = false;
 
     /**
@@ -64,7 +64,7 @@ public class OpcOutputStream extends DeflaterOutputStream {
         }
 
         current.size = def.getBytesRead();
-        current.compressedSize = (int) def.getBytesWritten();
+        current.compressedSize = def.getBytesWritten();
         current.crc = crc.getValue();
 
         written += current.compressedSize;
@@ -86,11 +86,18 @@ public class OpcOutputStream extends DeflaterOutputStream {
         if(current != null) {
             closeEntry();
         }
-        int offset = written;
+        long cenOffset = written;
         for (Entry entry : entries) {
             written += spec.writeCEN(entry);
         }
-        written += spec.writeEND(entries.size(), offset, written - offset);
+        long cenLength = written - cenOffset;
+
+        // Zip64 end of central directory record & locator
+        long z64CenEndOffset = written;
+        written += spec.writeZIP64_CEN_END(entries.size(), cenOffset, cenLength);
+        written += spec.writeZIP64_CEN_LOC(z64CenEndOffset);
+
+        written += spec.writeEND(entries.size(), cenOffset, cenLength);
         finished = true;
     }
 
